@@ -1,0 +1,72 @@
+{
+  "mario_rossi": {
+    "username": "mario_rossi",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "tester": {
+    "username": "tester",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "mario": {
+    "username": "mario",
+    "passwordHash": "2116c2e0aac734e880e1591a109ee6296b9df7b9a1095b1d37f78ca189d794ef",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "peppe": {
+    "username": "peppe",
+    "password": "8d4b98b9edbe4a328cf1802c5c5a43e5556547f3f9817b817a00594d4f0d3b6f",
+    "passwordHash": "8d4b98b9edbe4a328cf1802c5c5a43e5556547f3f9817b817a00594d4f0d3b6f",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "luigi": {
+    "username": "luigi",
+    "passwordHash": "fcf730b6d95236ecd3c9fc2d92d7b6b2bb061514961aec041d6c7a7192f592e4",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "brescia": {
+    "username": "brescia",
+    "password": "6916cc8cca322a9f40e9d4d87e57cec1c37b9c26fdfa744f0e9706c21f13ce92",
+    "passwordHash": "6916cc8cca322a9f40e9d4d87e57cec1c37b9c26fdfa744f0e9706c21f13ce92",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "player_one": {
+    "username": "player_one",
+    "password": "46708f23d682fef9aa996ecbb139bfb6c9ffdc039905ad6ad5c85a88b9411d97",
+    "passwordHash": "46708f23d682fef9aa996ecbb139bfb6c9ffdc039905ad6ad5c85a88b9411d97",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "mario_rossi_v2": {
+    "username": "mario_rossi_v2",
+    "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+    "passwordHash": "93bbb2291d047239a67de27d68e049be45e7a285567660e233dbb3e10ac34d04",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  },
+  "player_two": {
+    "username": "player_two",
+    "password": "46708f23d682fef9aa996ecbb139bfb6c9ffdc039905ad6ad5c85a88b9411d97",
+    "passwordHash": "46708f23d682fef9aa996ecbb139bfb6c9ffdc039905ad6ad5c85a88b9411d97",
+    "score": 0,
+    "gamesPlayed": 0,
+    "gamesWon": 0
+  }
+}
