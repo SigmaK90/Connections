@@ -3,12 +3,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Rappresenta lo stato di gioco di un giocatore, con le informazioni necessarie per la persistenza e il calcolo del punteggio
+ */
 public class PlayerGameState {
-
+    // Stato della partita per il giocatore
     public enum Status {
         IN_PROGRESS,
         WON,
-        LOST
+        LOST,
+        TIMED_OUT
     }
 
     private int gameId;
@@ -16,25 +20,40 @@ public class PlayerGameState {
     private int mistakes = 0;
     private int maxMistakes = 4;
     private Status status = Status.IN_PROGRESS;
-    
+
+    // Insieme delle categorie indovinate
     private final Set<String> guessedCategoryNames = new HashSet<>();
+
+    // Insieme delle parole indovinate
     private final Set<String> guessedWords = new HashSet<>();
+
+    // Insieme delle proposte dell'utente
     private final List<List<String>> proposalHistory = new ArrayList<>();
 
+    /**
+     * Costruttore completo
+     */
     public PlayerGameState(int gameId, String username, int maxMistakes) {
         this.gameId = gameId;
         this.username = username;
         this.maxMistakes = maxMistakes;
     }
 
+    /**
+     * Costruttore senza username
+     */
     public PlayerGameState(int gameId, int maxMistakes) {
         this(gameId, null, maxMistakes);
     }
 
+    /**
+     * Costruttore senza gameID
+     */
     public PlayerGameState(String username, int maxMistakes) {
         this(0, username, maxMistakes);
     }
 
+    // Getters e setters
     public int getGameId() {
         return gameId;
     }
@@ -64,9 +83,7 @@ public class PlayerGameState {
     }
 
     /**
-     * Calcola il punteggio dinamico in base alle regole ufficiali:
-     * - Bonus per gruppi indovinati: 1->+6, 2->+12, 3->+18
-     * - Penalità: -4 per ogni errore commesso
+     * Metodo che calcola il punteggio dell'utente in base alle categorie indovinate e agli errori commessi
      */
     public int getScore() {
         int correctCount = guessedCategoryNames.size();
@@ -92,29 +109,43 @@ public class PlayerGameState {
         this.status = status;
     }
 
+    /**
+     * Verifica se la partita sia terminata (Non in corso)
+     */
     public boolean isGameOver() {
         return status != Status.IN_PROGRESS;
     }
 
+    /**
+     * Restituisce una copia dell'insieme delle categorie indovinate e delle parole indovinate, per evitare modifiche esterne
+     */
     public Set<String> getGuessedCategoryNames() {
-        return guessedCategoryNames;
+        return new HashSet<>(guessedCategoryNames);
     }
 
+    /**
+     * Restituisce una copia dell'insieme delle parole indovinate, per evitare modifiche esterne
+     */
     public Set<String> getGuessedWords() {
-        return guessedWords;
+        return new HashSet<>(guessedWords);
     }
 
+    /**
+     * Restituisce il numero di categorie indovinate
+     */
     public int getGuessedCategoriesCount() {
         return guessedCategoryNames.size();
     }
 
+    /**
+     * Verifica se una parola è nell'insieme delle parole già indovinate
+     */
     public boolean isWordAlreadyGuessed(String word) {
         return guessedWords.contains(word.trim().toLowerCase());
     }
 
     /**
-     * Aggiunge una categoria indovinata. 
-     * Raggiunti 3 gruppi indovinati, il giocatore vince la partita.
+     * Aggiunge una categoria all'insieme delle categorie indovinate, e le parole corrispondenti a quello delle parole indovinate
      */
     public void addGuessedCategory(String categoryName, Set<String> words) {
         guessedCategoryNames.add(categoryName);
@@ -129,8 +160,7 @@ public class PlayerGameState {
     }
 
     /**
-     * Incrementa il contatore degli errori.
-     * Raggiunto il limite di maxMistakes (4), la partita è persa.
+     * Incrementa il numero di errori commessi, al quarto errore imposta lo stato a "perso"
      */
     public void incrementMistakes() {
         this.mistakes++;
@@ -139,11 +169,17 @@ public class PlayerGameState {
         }
     }
 
-    public void addProposalToHistory(List<String> proposal) {
+    /**
+     * Metodo thread-safe per aggiungere una proposta alla cronologia delle proposte dell'utente.
+     */
+    public synchronized void addProposalToHistory(List<String> proposal) {
         this.proposalHistory.add(new ArrayList<>(proposal));
     }
 
-    public List<List<String>> getProposalHistory() {
-        return proposalHistory;
+    /**
+     * Metodo thread-safe per ottenere una copia della cronologia delle proposte dell'utente.
+     */
+    public synchronized List<List<String>> getProposalHistory() {
+        return new ArrayList<>(proposalHistory);
     }
 }

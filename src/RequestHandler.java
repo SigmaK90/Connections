@@ -2,16 +2,28 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Gestore centrale delle richieste lato server.
+ * Intercetta gli oggetti Request deserializzati da JSON, esegue le verifiche di autorizzazione,
+ * delega la logica a UserManager e GameManager, e restituisce un'istanza di Response.
+ */
 public class RequestHandler {
 
     private final UserManager userManager;
     private final GameManager gameManager;
 
+    /**
+     * Costruisce il gestore delle richieste iniettando i gestori degli utenti e di gioco.
+     */
     public RequestHandler(UserManager userManager, GameManager gameManager) {
         this.userManager = userManager;
         this.gameManager = gameManager;
     }
 
+    /**
+     * Smista ed esegue l'operazione contenuta nella richiesta inoltrata dal client.
+     * Restituisce un'istanza di Response che rappresenta l'esito dell'operazione.
+     */
     public Response handle(Request request, Session session) {
         String operation = request.getOperation();
         
@@ -47,14 +59,20 @@ public class RequestHandler {
 
                 boolean loggedIn = userManager.login(loginUser, loginPsw);
                 if (loggedIn) {
-                    session.setUsername(loginUser);
+                    session.setUsername(loginUser.trim());
 
                     if (request.getUdpPort() > 0 && request.getUdpPort() <= 65535) {
                         session.setUdpPort(request.getUdpPort());
-                        userManager.registerUdpPort(loginUser, request.getUdpPort());
+                        userManager.registerUdpPort(loginUser.trim(), request.getUdpPort());
                     }
 
-                    return Response.ok("Login effettuato con successo!");
+                    // Sezione 2.1 PDF: restituisce automaticamente i dati della partita corrente al login
+                    Map<String, Object> gameInfo = gameManager.getGameInfo(null, loginUser.trim());
+                    Response response = Response.ok("Login effettuato con successo!");
+                    if (gameInfo != null) {
+                        response.setData(gameInfo);
+                    }
+                    return response;
                 } else {
                     return Response.unauthorized("Credenziali non valide.");
                 }
@@ -74,11 +92,11 @@ public class RequestHandler {
                     return Response.error("Parametri 'oldName' e 'oldPsw' obbligatori per l'aggiornamento.");
                 }
 
-                if (!session.getUsername().equals(oldName)) {
+                if (!session.getUsername().equals(oldName.trim())) {
                     return Response.unauthorized("Non puoi modificare le credenziali di un altro utente.");
                 }
 
-                boolean updated = userManager.updateCredentials(oldName, oldPsw, newName, newPsw);
+                boolean updated = userManager.updateCredentials(oldName.trim(), oldPsw, newName, newPsw);
                 if (updated) {
                     if (newName != null && !newName.trim().isEmpty()) {
                         session.setUsername(newName.trim());
@@ -116,15 +134,15 @@ public class RequestHandler {
                     return Response.error(result.getMessage());
                 }
 
-                PlayerGameState state = gameManager.getOrCreatePlayerState(username);
-
+                // Utilizza direttamente i dati incapsulati in ProposalResult (nessun rischio di NPE)
                 Map<String, Object> data = new HashMap<>();
                 data.put("correct", result.isCorrect());
                 data.put("oneAway", result.isOneAway());
-                data.put("mistakes", state.getMistakes());
-                data.put("status", state.getStatus().toString());
-                data.put("guessedCategories", state.getGuessedCategoryNames());
-                data.put("currentScore", state.getScore());
+                data.put("mistakes", result.getMistakes());
+                data.put("errorsLeft", result.getErrorsLeft());
+                data.put("status", result.getStatus().toString());
+                data.put("guessedCategories", result.getGuessedCategories());
+                data.put("currentScore", result.getScore());
 
                 Response response = Response.ok(result.getMessage());
                 response.setData(data);

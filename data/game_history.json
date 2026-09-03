@@ -1,0 +1,77 @@
+{
+  "0": {
+    "puzzle": {
+      "gameId": 0,
+      "groups": [
+        {
+          "theme": "WET WEATHER",
+          "words": [
+            "SNOW",
+            "HAIL",
+            "RAIN",
+            "SLEET"
+          ]
+        },
+        {
+          "theme": "NBA TEAMS",
+          "words": [
+            "HEAT",
+            "BUCKS",
+            "JAZZ",
+            "NETS"
+          ]
+        },
+        {
+          "theme": "KEYBOARD KEYS",
+          "words": [
+            "SHIFT",
+            "TAB",
+            "RETURN",
+            "OPTION"
+          ]
+        },
+        {
+          "theme": "PALINDROMES",
+          "words": [
+            "LEVEL",
+            "KAYAK",
+            "RACECAR",
+            "MOM"
+          ]
+        }
+      ]
+    },
+    "finalPlayerStates": {
+      "fabrizio": {
+        "gameId": 0,
+        "username": "fabrizio",
+        "mistakes": 1,
+        "maxMistakes": 4,
+        "status": "TIMED_OUT",
+        "guessedCategoryNames": [
+          "PALINDROMES"
+        ],
+        "guessedWords": [
+          "level",
+          "mom",
+          "kayak",
+          "racecar"
+        ],
+        "proposalHistory": [
+          [
+            "kayak",
+            "level",
+            "mom",
+            "racecar"
+          ],
+          [
+            "heat",
+            "hail",
+            "snow",
+            "rain"
+          ]
+        ]
+      }
+    }
+  }
+}

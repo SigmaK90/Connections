@@ -15,11 +15,20 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * Server di rete principale basato su Java NIO e sul pattern Reactor/Worker.
+ * Gestisce le connessioni TCP dei client tramite un Selector e delega l'elaborazione
+ * delle richieste a un pool di thread worker. Gestisce inoltre l'invio di notifiche UDP in broadcast.
+ */
 public class NioServerMain implements Runnable {
 
     private final int port;
@@ -35,24 +44,35 @@ public class NioServerMain implements Runnable {
 
     private final ExecutorService threadPool;
 
+    // Set thread-safe delle sessioni attive per broadcast UDP in sicurezza.
+    private final Set<Session> activeSessions = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Inizializza il server caricando le configurazioni, istanziando i gestori di gioco/utenti
+     * e registrando i callback per le notifiche UDP di inizio/pausa partita.
+     */
     public NioServerMain(int port, String puzzleFilePath, String historyFilePath, long gameDurationMs, long pauseDurationMs, int maxMistakes, int threadPoolSize) {
         this.port = port;
         this.gson = new Gson();
         this.userManager = new UserManager("users.json");
-        
+
         this.gameManager = new GameManager(puzzleFilePath, historyFilePath, gameDurationMs, pauseDurationMs, maxMistakes, userManager);
         this.requestHandler = new RequestHandler(userManager, gameManager);
         this.threadPool = Executors.newFixedThreadPool(threadPoolSize);
 
-        this.gameManager.setOnGameStartCallback((gameId, message) -> 
-            broadcastUdpNotification("GAME_STARTED:" + gameId)
+        // Callback per notifiche UDP inviate dal GameManager in coincidenza con gli eventi di gioco
+        this.gameManager.setOnGameStartCallback((gameId, payload) ->
+            broadcastUdpNotification(payload)
         );
 
-        this.gameManager.setOnPauseStartCallback((gameId, message) -> 
-            broadcastUdpNotification("GAME_ENDED:PAUSE_STARTED")
+        this.gameManager.setOnPauseStartCallback((gameId, payload) ->
+            broadcastUdpNotification(payload)
         );
     }
 
+    /**
+     * Esegue il ciclo principale del Selector Java NIO per intercettare ed elaborare gli eventi I/O.
+     */
     @Override
     public void run() {
         try {
@@ -64,7 +84,7 @@ public class NioServerMain implements Runnable {
             serverChannel.bind(new InetSocketAddress(port));
             serverChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-            System.out.println("[SERVER] In ascolto sulla porta " + port + " con Thread Pool...");
+            System.out.println("[SERVER] In ascolto sulla porta " + port + "... ");
 
             while (running) {
                 if (selector.select(1000) == 0) {
@@ -76,7 +96,9 @@ public class NioServerMain implements Runnable {
                     SelectionKey key = keys.next();
                     keys.remove();
 
-                    if (!key.isValid()) continue;
+                    if (!key.isValid()) {
+                        continue;
+                    }
 
                     if (key.isAcceptable()) {
                         acceptConnection(key);
@@ -87,12 +109,17 @@ public class NioServerMain implements Runnable {
             }
 
         } catch (IOException e) {
-            System.err.println("[SERVER] Errore nel server: " + e.getMessage());
+            System.err.println("[SERVER FATAL ERROR] Errore critico nel server: " + e.getMessage());
+            e.printStackTrace();
         } finally {
             shutdown();
         }
     }
 
+    /**
+     * Accetta una nuova connessione TCP in arrivo, la imposta come non bloccante
+     * e la registra sul Selector in ascolto per eventi di lettura (OP_READ).
+     */
     private void acceptConnection(SelectionKey key) throws IOException {
         ServerSocketChannel server = (ServerSocketChannel) key.channel();
         SocketChannel clientChannel = server.accept();
@@ -103,11 +130,16 @@ public class NioServerMain implements Runnable {
         InetSocketAddress remoteAddress = (InetSocketAddress) clientChannel.getRemoteAddress();
         session.setClientAddress(remoteAddress.getAddress());
 
+        activeSessions.add(session);
         clientChannel.register(selector, SelectionKey.OP_READ, session);
 
         System.out.println("[SERVER] Nuova connessione da: " + remoteAddress);
     }
 
+    /**
+     * Legge i byte in arrivo dal canale client e li accumula. Quando viene rilevato il carattere
+     * di terminazione '\n', il messaggio JSON viene inviato al thread pool per l'elaborazione.
+     */
     private void readFromClient(SelectionKey key) {
         SocketChannel clientChannel = (SocketChannel) key.channel();
         Session session = (Session) key.attachment();
@@ -124,15 +156,19 @@ public class NioServerMain implements Runnable {
             buffer.flip();
 
             while (buffer.hasRemaining()) {
-                char c = (char) buffer.get();
-                if (c == '\n') {
-                    String jsonRequest = session.messageBuilder.toString().trim();
-                    session.messageBuilder.setLength(0);
+                byte b = buffer.get();
+                if (b == '\n') {
+                    // Decodifica il messaggio completo da byte grezzi a stringa UTF-8
+                    byte[] rawBytes = session.rawMessageBuffer.toByteArray();
+                    session.rawMessageBuffer.reset();
+                    String jsonRequest = new String(rawBytes, StandardCharsets.UTF_8).trim();
 
                     if (!jsonRequest.isEmpty()) {
                         System.out.println("[SERVER] Ricevuto da " + clientChannel.getRemoteAddress() + ": " + jsonRequest);
 
                         if (isLogoutRequest(jsonRequest)) {
+                            // Disattiva letture successive prima di delegare il logout al pool
+                            key.interestOps(0);
                             threadPool.execute(() -> {
                                 processAndRespond(clientChannel, session, jsonRequest);
                                 closeClientConnection(key, clientChannel, session, "Logout eseguito con successo.");
@@ -143,8 +179,9 @@ public class NioServerMain implements Runnable {
 
                         threadPool.execute(() -> processAndRespond(clientChannel, session, jsonRequest));
                     }
-                } else {
-                    session.messageBuilder.append(c);
+                } else if (b != '\r') {
+                    // Accumula byte grezzi (non char) per preservare UTF-8 multi-byte
+                    session.rawMessageBuffer.write(b);
                 }
             }
 
@@ -155,6 +192,10 @@ public class NioServerMain implements Runnable {
         }
     }
 
+    /**
+     * Elabora la richiesta JSON tramite RequestHandler e scrive la risposta sul canale del client.
+     * Metodo eseguito dai thread del ThreadPool.
+     */
     private void processAndRespond(SocketChannel clientChannel, Session session, String jsonRequest) {
         Response response;
 
@@ -178,25 +219,37 @@ public class NioServerMain implements Runnable {
                 if (clientChannel.isOpen()) {
                     ByteBuffer writeBuffer = ByteBuffer.wrap(jsonResponse.getBytes(StandardCharsets.UTF_8));
                     while (writeBuffer.hasRemaining()) {
-                        clientChannel.write(writeBuffer);
+                        int written = clientChannel.write(writeBuffer);
+                        if (written == 0) {
+                            // Previene busy-waiting su socket buffer temporaneamente pieno
+                            Thread.sleep(1);
+                        }
                     }
                 }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (IOException e) {
                 System.err.println("[SERVER] Errore nell'invio della risposta: " + e.getMessage());
             }
         }
     }
 
+    /**
+     * Chiude in sicurezza il canale client, annulla la chiave del Selector e ripulisce la sessione.
+     */
     private void closeClientConnection(SelectionKey key, SocketChannel clientChannel, Session session, String reason) {
         try {
-            String clientInfo = (clientChannel != null && clientChannel.isOpen()) 
-                    ? clientChannel.getRemoteAddress().toString() 
+            String clientInfo = (clientChannel != null && clientChannel.isOpen())
+                    ? clientChannel.getRemoteAddress().toString()
                     : "Sconosciuto";
 
-            if (session != null && session.isLoggedIn()) {
-                System.out.println("[SERVER] Cleanup sessione per l'utente: " + session.getUsername());
-                userManager.unregisterUdpPort(session.getUsername());
-                session.setUsername(null);
+            if (session != null) {
+                activeSessions.remove(session);
+                if (session.isLoggedIn()) {
+                    System.out.println("[SERVER] Cleanup sessione per l'utente: " + session.getUsername());
+                    userManager.unregisterUdpPort(session.getUsername());
+                    session.setUsername(null);
+                }
             }
 
             if (key != null) {
@@ -214,10 +267,21 @@ public class NioServerMain implements Runnable {
         }
     }
 
+    /**
+     * Verifica se la stringa JSON ricevuta rappresenta una richiesta di logout.
+     */
     private boolean isLogoutRequest(String json) {
-        return json.contains("\"operation\":\"logout\"") || json.contains("\"operation\": \"logout\"");
+        try {
+            Request r = gson.fromJson(json, Request.class);
+            return r != null && "logout".equalsIgnoreCase(r.getOperation());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
+    /**
+     * Invia una notifica UDP Datagram a una specifica sessione utente.
+     */
     public void sendUdpNotification(Session session, String message) {
         if (session == null || !session.isLoggedIn() || session.getUdpPort() <= 0 || session.getClientAddress() == null) {
             return;
@@ -232,30 +296,45 @@ public class NioServerMain implements Runnable {
         }
     }
 
+    /**
+     * Invia una notifica UDP Datagram in broadcast a tutte le sessioni attualmente connesse e autenticate.
+     */
     public void broadcastUdpNotification(String message) {
-        if (selector == null) return;
+        if (udpSocket == null || udpSocket.isClosed()) return;
 
-        for (SelectionKey key : selector.keys()) {
-            if (key.isValid() && key.attachment() instanceof Session) {
-                Session session = (Session) key.attachment();
-                sendUdpNotification(session, message);
-            }
+        // Itera sul set thread-safe activeSessions (evita ConcurrentModificationException)
+        for (Session session : activeSessions) {
+            sendUdpNotification(session, message);
         }
     }
 
+    /**
+     * Interrompe il ciclo del server e risveglia il Selector arrestando i sottosistemi.
+     */
     public void stop() {
         this.running = false;
-        if (gameManager != null) gameManager.stop();
-        if (selector != null) selector.wakeup();
+        if (gameManager != null) {
+            gameManager.stop();
+        }
+        if (selector != null) {
+            selector.wakeup();
+        }
     }
 
+    /**
+     * Esegue l'arresto pulito delle risorse di rete, chiude i canali e fa shutdown del ThreadPool.
+     */
     private void shutdown() {
         try {
-            if (gameManager != null) gameManager.stop();
+            if (gameManager != null) {
+                gameManager.stop();
+            }
             threadPool.shutdown();
 
             if (selector != null && selector.isOpen()) {
-                for (SelectionKey key : selector.keys()) {
+                // Snapshot delle chiavi per evitare ConcurrentModificationException
+                List<SelectionKey> keysSnapshot = new ArrayList<>(selector.keys());
+                for (SelectionKey key : keysSnapshot) {
                     if (key.channel() instanceof SocketChannel) {
                         SocketChannel channel = (SocketChannel) key.channel();
                         Session session = (Session) key.attachment();
@@ -265,8 +344,12 @@ public class NioServerMain implements Runnable {
                 selector.close();
             }
 
-            if (udpSocket != null && !udpSocket.isClosed()) udpSocket.close();
-            if (serverChannel != null) serverChannel.close();
+            if (udpSocket != null && !udpSocket.isClosed()) {
+                udpSocket.close();
+            }
+            if (serverChannel != null) {
+                serverChannel.close();
+            }
 
             System.out.println("[SERVER] Server ed eventuali risorse residue arrestati correttamente.");
         } catch (IOException e) {
@@ -274,6 +357,9 @@ public class NioServerMain implements Runnable {
         }
     }
 
+    /**
+     * Metodo main che legge il file di configurazione server.properties e avvia il server NIO.
+     */
     public static void main(String[] args) {
         Properties prop = new Properties();
         int port = 8080;
@@ -295,7 +381,8 @@ public class NioServerMain implements Runnable {
                     System.out.println("[SERVER] Caricata configurazione da: " + path);
                     break;
                 }
-            } catch (FileNotFoundException ignored) {}
+            } catch (FileNotFoundException ignored) {
+            }
         }
 
         if (input != null) {
@@ -333,6 +420,13 @@ public class NioServerMain implements Runnable {
         }
 
         NioServerMain server = new NioServerMain(port, puzzleFile, historyFile, gameDurationMs, pauseDurationMs, maxMistakes, threadPoolSize);
-        new Thread(server).start();
+        Thread serverThread = new Thread(server);
+        serverThread.start();
+
+        try {
+            serverThread.join();
+        } catch (InterruptedException e) {
+            System.err.println("[SERVER] Thread principale interrotto.");
+        }
     }
 }

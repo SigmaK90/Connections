@@ -3,13 +3,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
 
+/**
+ * Rappresenta una categoria di parole di connections, deserializzate da Connections_Data.json
+ */
 public class Category {
-
+    // Mappo il campo "theme" del json, ma accetto anche "category"
     @SerializedName(value = "theme", alternate = {"category"})
     private String theme;
-
+    // Parole che appartengono alla categoria
     private List<String> words;
-
+    // Costruttore vuoto richiesto da GSON per la reflection
     public Category() {}
 
     public Category(String theme, List<String> words) {
@@ -17,6 +20,7 @@ public class Category {
         this.words = words;
     }
 
+    // Getters e setters
     public String getTheme() {
         return theme;
     }
@@ -34,7 +38,7 @@ public class Category {
     }
 
     /**
-     * Verifica se la lista di 4 parole inoltrata corrisponde esattamente a questa categoria.
+     * Metodo che verifica se una proposta dell'utente sia una categoria ben formata ed esistente
      */
     public boolean matches(List<String> userWords) {
         if (userWords == null || userWords.size() != 4 || words == null) {
@@ -55,8 +59,7 @@ public class Category {
     }
 
     /**
-     * Conta quante parole della proposta appartengono a questa categoria.
-     * Utile per rilevare l'esito "One Away" (3 parole su 4).
+     * Metodo che conta quante parole di una stringa corrispondono a quelle della categoria
      */
     public int countMatches(List<String> userWords) {
         if (userWords == null || words == null) {

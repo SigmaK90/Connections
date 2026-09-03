@@ -1,27 +1,41 @@
 import java.util.List;
 
+/**
+ * Rappresenta una richiesta inviata dal client al server.
+ * I campi vengono popolati automaticamente da GSON durante la deserializzazione JSON
+ * in base al tipo di operazione richiesta.
+ */
 public class Request {
+
+    // Identificatore del tipo di richiesta (es. "login", "register")
     private String operation;
+
+    // Credenziali utente
     private String username;
     private String name;
     private String psw;
+
+    // Campi per la modifica delle credenziali durante la richiesta di update
     private String oldName;
     private String oldPsw;
     private String newName;
     private String newPsw;
     
-    // Campo corretto da 'proposal' a 'words' secondo il PDF
+    // Lista di parole inviate dall'utente per la proposta di una soluzione
     private List<String> words;
     
-    // Nuovi campi richiesti dalle specifiche JSON del PDF
+    // Campi con tipi wrapper per gestire valori nulli tramite GSON
     private Integer gameId;        // Per requestGameInfo e requestGameStats
     private String playerName;     // Per requestLeaderboard
     private Integer topPlayers;    // Per requestLeaderboard
     
+    // Porta UDP su cui il client è in ascolto per le notifiche asincrone
     private int udpPort;
 
+    // Costruttore vuoto richiesto da GSON per la reflection durante la deserializzazione
     public Request() {}
 
+    // Getter e setter per tutti i campi di Request
     public String getOperation() {
         return operation;
     }
