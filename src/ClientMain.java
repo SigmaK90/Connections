@@ -1,5 +1,7 @@
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -15,6 +17,7 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Scanner;
 
@@ -29,6 +32,7 @@ public class ClientMain {
     private final int port;
     private final int preferredUdpPort;
     private int actualUdpPort;
+    @SuppressWarnings("unused")
     private final Gson prettyGson;
     private DatagramSocket udpSocket;
 
@@ -191,7 +195,7 @@ public class ClientMain {
             }
             actualUdpPort = udpSocket.getLocalPort();
         } catch (SocketException e) {
-            System.err.println("[UDP CLIENT] Impossibile inizializzare la socket UDP: " + e.getMessage());
+            System.err.println("[UDP CLIENT] Impossibile inizializzare il socket UDP: " + e.getMessage());
             return;
         }
 
@@ -203,13 +207,15 @@ public class ClientMain {
                     udpSocket.receive(packet);
                     String rawNotification = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
 
-                    System.out.println("\n\n[NOTIFICA ASINCRONA UDP]:");
+                    System.out.println("\n\n----------------------------------------");
+                    System.out.println("[NOTIFICA ASINCRONA UDP]");
                     try {
                         JsonObject parsed = JsonParser.parseString(rawNotification).getAsJsonObject();
-                        System.out.println(prettyGson.toJson(parsed));
+                        printPrettyJsonObject(parsed, "  ");
                     } catch (Exception e) {
-                        System.out.println(rawNotification);
+                        System.out.println("  " + rawNotification);
                     }
+                    System.out.println("----------------------------------------");
                     System.out.print("> ");
                 }
             } catch (SocketException e) {
@@ -235,42 +241,109 @@ public class ClientMain {
     /**
      * Invia una richiesta JSON al server tramite canale TCP e attende la risposta terminata da '\n'.
      */
-    private boolean sendAndReceive(SocketChannel socketChannel, String jsonPayload) throws IOException {
-        String msg = jsonPayload + "\n";
-        socketChannel.write(ByteBuffer.wrap(msg.getBytes(StandardCharsets.UTF_8)));
-
-        StringBuilder responseBuilder = new StringBuilder();
-        ByteBuffer readBuffer = ByteBuffer.allocate(8192);
-
-        while (true) {
-            readBuffer.clear();
-            int bytesRead = socketChannel.read(readBuffer);
-            if (bytesRead <= 0) {
-                if (bytesRead == -1) {
-                    System.out.println("[CLIENT] Il server ha chiuso la connessione.");
-                    return false;
-                }
-                break;
-            }
-
-            readBuffer.flip();
-            String chunk = StandardCharsets.UTF_8.decode(readBuffer).toString();
-            responseBuilder.append(chunk);
-
-            if (responseBuilder.indexOf("\n") != -1) {
-                break;
-            }
-        }
-
-        String rawResponse = responseBuilder.toString().trim();
+    private boolean sendAndReceive(SocketChannel socketChannel, String jsonPayload) {
         try {
-            JsonObject formattedJson = JsonParser.parseString(rawResponse).getAsJsonObject();
-            System.out.println("[RISPOSTA SERVER]:\n" + prettyGson.toJson(formattedJson));
-        } catch (Exception e) {
-            System.out.println("[RISPOSTA RAW]: " + rawResponse);
-        }
+            String msg = jsonPayload + "\n";
+            socketChannel.write(ByteBuffer.wrap(msg.getBytes(StandardCharsets.UTF_8)));
 
-        return true;
+            StringBuilder responseBuilder = new StringBuilder();
+            ByteBuffer readBuffer = ByteBuffer.allocate(8192);
+
+            while (true) {
+                readBuffer.clear();
+                int bytesRead = socketChannel.read(readBuffer);
+                if (bytesRead <= 0) {
+                    if (bytesRead == -1) {
+                        System.out.println("\n[CLIENT] Il server ha chiuso la connessione.");
+                        return false;
+                    }
+                    break;
+                }
+
+                readBuffer.flip();
+                String chunk = StandardCharsets.UTF_8.decode(readBuffer).toString();
+                responseBuilder.append(chunk);
+
+                if (responseBuilder.indexOf("\n") != -1) {
+                    break;
+                }
+            }
+
+            String rawResponse = responseBuilder.toString().trim();
+            try {
+                JsonObject formattedJson = JsonParser.parseString(rawResponse).getAsJsonObject();
+                
+                String status = formattedJson.has("status") ? formattedJson.get("status").getAsString() : "INFO";
+                String message = formattedJson.has("message") ? formattedJson.get("message").getAsString() : "";
+
+                System.out.println("\n----------------------------------------");
+                System.out.println("ESITO: [" + status + "] " + message);
+
+                if (formattedJson.has("data") && !formattedJson.get("data").isJsonNull()) {
+                    System.out.println("\nDETTAGLI:");
+                    JsonElement dataElem = formattedJson.get("data");
+                    if (dataElem.isJsonObject()) {
+                        printPrettyJsonObject(dataElem.getAsJsonObject(), "  ");
+                    } else if (dataElem.isJsonArray()) {
+                        printPrettyJsonArray(dataElem.getAsJsonArray(), "  ");
+                    } else {
+                        System.out.println("  " + dataElem.toString());
+                    }
+                }
+                System.out.println("----------------------------------------");
+
+            } catch (Exception e) {
+                System.out.println("\n----------------------------------------");
+                System.out.println("[RISPOSTA RAW]: " + rawResponse);
+                System.out.println("----------------------------------------");
+            }
+
+            return true;
+
+        } catch (IOException e) {
+            System.err.println("\n[CLIENT ERRORE CRITICO] Impossibile comunicare con il server: connessione persa o server offline.");
+            return false;
+        }
+    }
+
+    /**
+     * Utility di formattazione ricorsiva per stampare oggetti JSON in modo compatto senza graffe visibili.
+     */
+    private void printPrettyJsonObject(JsonObject obj, String indent) {
+        for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
+            String key = entry.getKey();
+            JsonElement val = entry.getValue();
+
+            if (val.isJsonObject()) {
+                System.out.println(indent + "- " + key + ":");
+                printPrettyJsonObject(val.getAsJsonObject(), indent + "    ");
+            } else if (val.isJsonArray()) {
+                System.out.println(indent + "- " + key + ":");
+                printPrettyJsonArray(val.getAsJsonArray(), indent + "    ");
+            } else {
+                String strVal = val.isJsonPrimitive() ? val.getAsString() : val.toString();
+                System.out.println(indent + "- " + key + ": " + strVal);
+            }
+        }
+    }
+
+    /**
+     * Utility di formattazione ricorsiva per stampare array JSON (es. liste di giocatori nella classifica) in modo pulito.
+     */
+    private void printPrettyJsonArray(JsonArray array, String indent) {
+        int index = 1;
+        for (JsonElement elem : array) {
+            if (elem.isJsonObject()) {
+                System.out.println(indent + "[" + index + "]");
+                printPrettyJsonObject(elem.getAsJsonObject(), indent + "  ");
+                index++;
+            } else if (elem.isJsonArray()) {
+                printPrettyJsonArray(elem.getAsJsonArray(), indent + "  ");
+            } else {
+                String strVal = elem.isJsonPrimitive() ? elem.getAsString() : elem.toString();
+                System.out.println(indent + "- " + strVal);
+            }
+        }
     }
 
     /**

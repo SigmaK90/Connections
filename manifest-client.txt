@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Main-Class: ClientMain
+Class-Path: lib/gson-2.13.1.jar
+

@@ -42,22 +42,38 @@
       ]
     },
     "finalPlayerStates": {
-      "fabrizio": {
+      "domenico": {
         "gameId": 0,
-        "username": "fabrizio",
-        "mistakes": 1,
+        "username": "domenico",
+        "mistakes": 0,
         "maxMistakes": 4,
-        "status": "TIMED_OUT",
+        "status": "WON",
         "guessedCategoryNames": [
+          "KEYBOARD KEYS",
+          "NBA TEAMS",
           "PALINDROMES"
         ],
         "guessedWords": [
+          "heat",
+          "bucks",
+          "tab",
+          "nets",
           "level",
+          "jazz",
+          "shift",
           "mom",
           "kayak",
-          "racecar"
+          "racecar",
+          "return",
+          "option"
         ],
         "proposalHistory": [
+          [
+            "bucks",
+            "heat",
+            "jazz",
+            "nets"
+          ],
           [
             "kayak",
             "level",
@@ -65,10 +81,10 @@
             "racecar"
           ],
           [
-            "heat",
-            "hail",
-            "snow",
-            "rain"
+            "option",
+            "return",
+            "shift",
+            "tab"
           ]
         ]
       }

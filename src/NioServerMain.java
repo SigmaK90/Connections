@@ -419,6 +419,17 @@ public class NioServerMain implements Runnable {
             System.out.println("[SERVER] Nessun file server.properties trovato, uso default.");
         }
 
+        // Risoluzione flessibile del percorso del dataset dei puzzle
+        if (!new File(puzzleFile).exists()) {
+            String[] candidatePaths = {"data/Connections_Data.json", "../data/Connections_Data.json", "Connections_Data.json"};
+            for (String cp : candidatePaths) {
+                if (new File(cp).exists()) {
+                    puzzleFile = cp;
+                    break;
+                }
+            }
+        }
+
         NioServerMain server = new NioServerMain(port, puzzleFile, historyFile, gameDurationMs, pauseDurationMs, maxMistakes, threadPoolSize);
         Thread serverThread = new Thread(server);
         serverThread.start();

@@ -1,0 +1,20 @@
+{
+  "domenico": {
+    "username": "domenico",
+    "passwordHash": "aa28ab96ade2a3ecaff7e6e47b19eb5a6f329db0db05a7398444f100af4b4b3f",
+    "score": 18,
+    "gamesPlayed": 1,
+    "gamesWon": 1,
+    "currentStreak": 1,
+    "maxStreak": 1,
+    "perfectPuzzles": 1,
+    "mistakeHistogram": {
+      "0": 1,
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0,
+      "DNF": 0
+    }
+  }
+}
